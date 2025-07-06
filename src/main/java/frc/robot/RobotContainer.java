@@ -22,6 +22,7 @@ import edu.wpi.first.wpilibj.GenericHID;
 import edu.wpi.first.wpilibj.XboxController;
 import edu.wpi.first.wpilibj2.command.Command;
 import edu.wpi.first.wpilibj2.command.Commands;
+import edu.wpi.first.wpilibj2.command.InstantCommand;
 import edu.wpi.first.wpilibj2.command.button.CommandXboxController;
 import edu.wpi.first.wpilibj2.command.sysid.SysIdRoutine;
 import frc.robot.commands.DriveCommands;
@@ -29,6 +30,7 @@ import frc.robot.generated.TunerConstants;
 import frc.robot.subsystems.drive.Drive;
 import frc.robot.subsystems.drive.GyroIO;
 import frc.robot.subsystems.drive.ModuleIOSim;
+import frc.robot.subsystems.elevator.Elevator;
 import frc.robot.subsystems.vision.Vision;
 import frc.robot.subsystems.vision.VisionIO;
 import frc.robot.subsystems.vision.VisionIOLimelight;
@@ -44,6 +46,7 @@ import org.littletonrobotics.junction.networktables.LoggedDashboardChooser;
 public class RobotContainer {
   private final Drive drive;
   private final Vision vision;
+  private final Elevator elevator;
 
   // Controller
   private final CommandXboxController controller = new CommandXboxController(0);
@@ -70,11 +73,9 @@ public class RobotContainer {
                 drive::addVisionMeasurement,
                 new VisionIOLimelight(camera0Name, drive::getRotation),
                 new VisionIOLimelight(camera1Name, drive::getRotation));
-        // vision =
-        //     new Vision(
-        //         demoDrive::addVisionMeasurement,
-        //         new VisionIOPhotonVision(camera0Name, robotToCamera0),
-        //         new VisionIOPhotonVision(camera1Name, robotToCamera1));
+
+        // Sim robot, instantiate physics sim IO implementations
+        elevator = new Elevator();
         break;
 
       case SIM:
@@ -93,6 +94,9 @@ public class RobotContainer {
                 drive::addVisionMeasurement,
                 new VisionIOPhotonVisionSim(camera0Name, robotToCamera0, drive::getPose),
                 new VisionIOPhotonVisionSim(camera1Name, robotToCamera1, drive::getPose));
+
+        // Sim robot, instantiate physics sim IO implementations
+        elevator = new Elevator();
         break;
 
       default:
@@ -107,6 +111,9 @@ public class RobotContainer {
         // Replayed robot, disable IO implementations
         // (Use same number of dummy implementations as the real robot)
         vision = new Vision(drive::addVisionMeasurement, new VisionIO() {}, new VisionIO() {});
+
+        // Sim robot, instantiate physics sim IO implementations
+        elevator = new Elevator();
         break;
     }
 
@@ -161,7 +168,15 @@ public class RobotContainer {
     // Switch to X pattern when X button is pressed
     controller.x().onTrue(Commands.runOnce(drive::stopWithX, drive));
 
-    // Reset gyro to 0° when B button is pressed
+    // Set the elevator to the top when the button is pressed
+    controller
+        .a()
+        .onTrue(new InstantCommand(() -> elevator.reachGoal(Constants.kSetpointMeters), elevator));
+
+    // Set the elevator to the bottom when the button is released
+    controller.a().onFalse(new InstantCommand(() -> elevator.reachGoal(0), elevator));
+
+    // Reset gyro to 0° when B button is pressed.ignoringDisable(true);
     controller
         .b()
         .onTrue(
@@ -172,38 +187,6 @@ public class RobotContainer {
                     drive)
                 .ignoringDisable(true));
   }
-
-  // /**
-  //  * Use this method to define your button->command mappings. Buttons can be created by
-  //  * instantiating a {@link GenericHID} or one of its subclasses ({@link
-  //  * edu.wpi.first.wpilibj.Joystick} or {@link XboxController}), and then passing it to a {@link
-  //  * edu.wpi.first.wpilibj2.command.button.JoystickButton}.
-  //  */
-  // private void configureButtonBindings() {
-  //   // Joystick drive command
-  //   drive.setDefaultCommand(
-  //       Commands.run(
-  //           () -> {
-  //             drive.run(-keyboard.getRawAxis(1), -keyboard.getRawAxis(0));
-  //           },
-  //           drive));
-
-  //   // Auto aim command example
-  //   @SuppressWarnings("resource")
-  //   PIDController aimController = new PIDController(0.2, 0.0, 0.0);
-  //   aimController.enableContinuousInput(-Math.PI, Math.PI);
-  //   keyboard
-  //       .button(1)
-  //       .whileTrue(
-  //           Commands.startRun(
-  //               () -> {
-  //                 aimController.reset();
-  //               },
-  //               () -> {
-  //                 drive.run(0.0, aimController.calculate(vision.getTargetX(0).getRadians()));
-  //               },
-  //               drive));
-  // }
 
   /**
    * Use this to pass the autonomous command to the main {@link Robot} class.
